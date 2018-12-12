@@ -32,10 +32,12 @@ network.compile(optimizer='sgd', loss='categorical_crossentropy',
 # Steps per epoch should be (Number of samples / batch size)
 history = network.fit_generator(train_generator, steps_per_epoch=266, nb_epoch=5)
 
+# Save text output of training history per epoch
 with open("training_history", "w") as output:
     output.write(str(history.history.keys()))
     output.write(str(history.history['acc']))
 
+# Generate graph of training history per epoch
 fig = plt.figure(figsize=(18, 16))
 plt.rcParams.update({'font.size': 22})
 plt.xlabel("Epoch")
