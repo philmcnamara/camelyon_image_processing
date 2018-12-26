@@ -20,5 +20,7 @@ This pipeline starts with a single TIF image and its corresponding XML mask with
 ### Keras
 
 We used Keras 2.1.6 with a TensorFlow backend. 
+
 **Basic_keras** - Proof-of-concept architecture we built to ensure our processing pipeline was functional
+
 **Inceptionv3** - Uses keras.applications.InceptionV3 to take advantage of a state-of-the-art architecture for image classification
