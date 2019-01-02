@@ -19,7 +19,7 @@ This pipeline starts with a single TIF image and its corresponding XML mask with
 
 ### Keras
 
-We used Keras 2.1.6 with a TensorFlow backend. 
+We used Keras 2.1.6 with a TensorFlow backend and CUDA 9.0 to train on 4 nVidia Tesla K80s.
 
 **Basic_keras** - Proof-of-concept architecture we built to ensure our processing pipeline was functional
 
