@@ -5,12 +5,12 @@ import matplotlib
 matplotlib.use("Agg")
 
 # Other imports
-from keras.applications.inception_v3 import InceptionV3
-from keras import preprocessing, initializers
-from keras.preprocessing import image
-from keras.layers import Dense, GlobalAveragePooling2D
-from keras.models import Model
-from keras.utils import multi_gpu_model
+import tensorflow.keras as keras
+from tensorflow.keras.applications.inception_v3 import InceptionV3
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
+from tensorflow.keras.models import Model, load_model
+from tensorflow.keras.utils import multi_gpu_model, to_categorical, HDF5Matrix
+from tensorflow.keras.callbacks import ModelCheckpoint
 import tensorflow as tf
 import argparse
 import numpy as np
@@ -19,8 +19,7 @@ import matplotlib.pyplot as plt
 
 def get_arguments():
     parser = argparse.ArgumentParser(
-        description="Keras InceptionV3 architecture for CAMELYON 256*256 pixel \
-        sliced and filtered PNGs"
+        description="Keras InceptionV3 architecture for tumor image classification"
     )
     # Multi-GPU
     parser.add_argument(
@@ -36,34 +35,28 @@ def get_arguments():
         "-b", "--batch_size", help="size of each batch in minibatch sampling",
         required=True, type=int
     )
+    parser.add_argument(
+        "-t", "--tiles", help="number of tiles from the HDF5 file to use for \
+        training/validation, (20% validation split)",
+        required=False, type=int
+    )
     # Input/Output Paths
     parser.add_argument(
-        "-t", "--training_directory", help="path to directory containing \
-        training images. Images should be in subdirectories by class",
-        required=True, type=str
-    )
-    parser.add_argument(
-        "-v", "--validation_directory", help="path to directory containing \
-        validation images. Images should be in subdirectories by class",
-        required=True, type=str
+        "-f", "--file_input", help="path to hdf5 file with training and \
+        validation data", required=True, type=str
     )
     parser.add_argument(
         "-o", "--output_directory", help="Directory to save weights and \
         training graphical summary, current directory by default",
         required=False, default=".", type=str
     )
-    # Optional extra output
     parser.add_argument(
-        "-sw", "--save_weights", help="Saves the model's weights to an HDF5 \
-        file in the output directory.", required=False, action="store_true"
+        "-n", "--output_name", help="Name of output files",
+        required=False, default="", type=str
     )
+    # Optional extra output, model is saved every epoch by default
     parser.add_argument(
-        "-sm", "--save_model", help="Saves the full model (weights, \
-        architecture, training configuration) to an HDF5 file in the \
-        output directory", required=False, action="store_true"
-    )
-    parser.add_argument(
-        "-gh", "--graphical_history", help="Saves a graphical summary of \
+        "-H", "--graphical_history", help="Saves a graphical summary of \
         the training history to the output directory.", required=False,
         action="store_true"
     )
@@ -74,40 +67,37 @@ args = get_arguments()
 # Strip trailing directory slashes
 args.output_directory = args.output_directory.rstrip("/")
 
-# Load data via generators
-train_datagen = preprocessing.image.ImageDataGenerator(rescale=1./255)
-train_generator = train_datagen.flow_from_directory(
-    directory=args.training_directory,
-    target_size=(256, 256),
-    color_mode="rgb",
-    # One batch per GPU
-    batch_size=args.batch_size * args.GPUs,
-    class_mode="categorical",
-    shuffle=True,
-    seed=42,
-)
+hdf5_path = args.file_input
 
-validation_datagen = preprocessing.image.ImageDataGenerator(rescale=1./255)
-validation_generator = validation_datagen.flow_from_directory(
-    directory=args.validation_directory,
-    target_size=(256, 256),
-    color_mode="rgb",
-    batch_size=args.batch_size,
-    class_mode="categorical",
-    shuffle=True,
-    seed=42,
-)
+# Load in data from HDF5 file
+train_data = HDF5Matrix(hdf5_path, "train_img")
+train_labels = HDF5Matrix(hdf5_path, "train_labels")
+train_labels = to_categorical(train_labels)
+val_data = HDF5Matrix(hdf5_path, "val_img")
+val_labels = HDF5Matrix(hdf5_path, "val_labels")
+val_labels = to_categorical(val_labels)
 
-# Initialize model with pre-trained ImageNet weights
+# Optionally subset data to train on fewer tiles
+if(args.tiles is not None):
+    train_index = int(args.tiles * 0.8)
+    val_index = int(args.tiles * 0.2)
+    train_data = train_data[0:train_index]
+    train_labels = train_labels[0:train_index]
+    val_data = val_data[0:val_index]
+    val_labels = val_labels[0:val_index]
+
+# Inception layers with imagenet weights
 base_model = InceptionV3(
     weights='imagenet',
     include_top=False,
     input_shape=(256, 256, 3)
 )
 
-# Output layers, softmax sums to 1.0 for class predictions
+# Output layers
 out = base_model.output
 out = GlobalAveragePooling2D()(out)
+out = Dense(1024, activation='relu')(out)
+out = Dropout(rate=0.2)(out)
 predictions = Dense(2, activation='softmax')(out)
 
 # Define Model via functional API
@@ -121,32 +111,40 @@ elif(args.GPUs > 1):
     model = multi_gpu_model(model, gpus=args.GPUs)
 
 # Compile
-# Binary crossentropy is most appropriate for 2-class classification problem
 model.compile(
     optimizer='sgd',
-    loss='binary_crossentropy',
+    loss='categorical_crossentropy',
     metrics=['accuracy']
 )
 
-# Train
-trained_model = model.fit_generator(
-    train_generator,
-    steps_per_epoch=train_generator.samples/(args.batch_size*args.GPUs),
-    validation_data=validation_generator,
-    validation_steps=validation_generator.samples/(args.batch_size*args.GPUs),
-    epochs=args.epochs,
+# Callbacks to save the model every epoch if it improves
+checkpoint = keras.callbacks.ModelCheckpoint(
+    args.output_directory + "/" + args.output_name + "_model.h5",
+    monitor='val_acc',
+    verbose=1,
+    save_best_only=True,
+    save_weights_only=False,
+    mode='auto',
+    period=1
 )
 
-# Optional Output
-if(args.save_weights):
-    model.save_weights(args.output_directory + "/inceptionv3_weights.h5")
+callbacks_list = [checkpoint]
 
-if(args.save_model):
-    model.save(args.output_directory + "/inceptionv3_model.h5")
+# Train
+trained_model = model.fit(
+    train_data,
+    train_labels,
+    validation_data=(val_data, val_labels),
+    epochs=args.epochs,
+    batch_size=args.batch_size,
+    shuffle='batch',
+    callbacks=callbacks_list
+)
 
+# Optional graphical summary
 if(args.graphical_history):
     history = trained_model.history
-    arange = np.arange(0, len(history["loss"]))
+    arange = np.arange(1, len(history["loss"]) + 1)
     plt.style.use("ggplot")
     plt.figure()
     plt.plot(arange, history["loss"], label="training loss")
@@ -157,5 +155,5 @@ if(args.graphical_history):
     plt.xlabel("Epoch Number")
     plt.ylabel("Loss / Accuracy")
     plt.legend()
-    plt.savefig(args.output_directory + "/inceptionv3_training_history.png")
+    plt.savefig(args.output_directory + "/" + args.output_name + "_training_history.png")
     plt.close()
