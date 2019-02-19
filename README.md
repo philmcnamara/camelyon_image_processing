@@ -51,9 +51,30 @@ We modified the original program to generate additional data by flipping and rot
 
 We used Keras 2.1.6 with a TensorFlow backend and CUDA 9.0 to train on 4 nVidia Tesla K80s.
 
-**training_inceptionV3** takes the HDF5 binary file as input and trains with the Inceptionv3 architecture, saving the model anytime an increase in validation accuracy is measured. It also generates optional graphical representations of training progress.
+**training_inceptionV3.py** takes the HDF5 binary file as input and trains with the Inceptionv3 architecture, saving the model anytime an increase in validation accuracy is measured. It also generates optional graphical representations of training progress.
 
+#### Command Line Arguments
 
+| Flag | Argument            | Description                                                  |
+| ---- | :------------------ | ------------------------------------------------------------ |
+| -g   | --gpus              | Integer, Number of GPUs to use for training                  |
+| -e   | --epochs            | Integer, number of epochs in training run                    |
+| -b   | --batch_size        | Integer, size of batches in training sampling. Batch size * gpus = total number of tiles in each step of training |
+| -t   | --tiles             | Number of tiles to train with, if training on the full HDF5 file is not desired |
+| -f   | --file_input        | Path to HDF5 file for training                               |
+| -o   | --output_directory  | Path to output directory for saved model and training graph  |
+| -n   | --output_name       | Name for output files, will be added as a prefix             |
+| -h   | --graphical_history | Optional argument, will save a training graphical history as a PNG in the output directory |
 
 ## Testing and Heatmap
+
+**predict_heatmap.py** uses a saved model from training and a new input HDF5 file with no annotation, and generates a heatmap with predictions of the expected tumor probability for each tile. 
+
+#### Command Line Arguments
+
+| Flag | Argument  | Description                                          |
+| ---- | --------- | ---------------------------------------------------- |
+| -p   | --predict | HDF5-converted TIF to use for prediction             |
+| -m   | --model   | Saved, pre-trained keras model to use for prediction |
+| -o   | --output  | Name of heatmap PNG output file                      |
 

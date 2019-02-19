@@ -41,8 +41,6 @@ hdf5_path = args.predict
 predict_data = HDF5Matrix(hdf5_path, "train_img")
 data_coords = HDF5Matrix(hdf5_path, "train_coords")
 
-# model=load_model("/projects/bgmp/oda/2018-group-projects-oda/camelyon/scripts/keras_inceptionv3/heatmap_training_model.h5")
-
 # Load trained model
 model = load_model(args.model)
 model = Model(inputs=model.input, outputs=model.output)
@@ -55,19 +53,6 @@ results = {}
 for tile in range(len(predict_data)):
     results[str(data_coords[tile][0]) + "_" +
             str(data_coords[tile][1])] = output[tile][1]
-
-
-# if(x > 25600 and x < 51200 and y > 96000):
-
-# # counter = 0
-# for coords, prob in results.items():
-#     coords_list = coords.split("_")
-#     y = int(coords_list[0])
-#     x = int(coords_list[1])
-#     if(x/256 > 100 and x/256 < 200 and y/256 > 375):
-#         print(results[coords])
-# #         counter += 1
-# # print(counter)
 
 # Max dimension of heatmap
 max_coords = 0

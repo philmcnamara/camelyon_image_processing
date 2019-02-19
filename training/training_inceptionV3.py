@@ -62,7 +62,7 @@ def get_arguments():
     )
     # Optional extra output, model is saved every epoch by default
     parser.add_argument(
-        "-H", "--graphical_history", help="Saves a graphical summary of \
+        "-h", "--graphical_history", help="Saves a graphical summary of \
         the training history to the output directory.", required=False,
         action="store_true"
     )
