@@ -20,7 +20,7 @@ Tiles are determined to be blank and discarded if a certain fraction of the pixe
 The final output file has four directories
 
 - **train_img** - training image data
-- **train_labels ** - training label data
+- **train_labels** - training label data
 - **val_img** - validation image data
 - **val_labels** - validation label data
 
